@@ -4,9 +4,9 @@ The backend for a full-stack task manager built for the **ICON Studios** full-st
 Users register, log in, and manage their own tasks — create, edit, delete, mark complete/incomplete,
 filter by status/priority/search, and reorder by drag-and-drop.
 
-- **Backend (this repo):** .NET 10 ASP.NET Core Web API · Clean Architecture · EF Core + SQL Server · JWT auth · FluentValidation · Serilog · Swagger
+- **Backend (this repo):** .NET 10 ASP.NET Core Web API · Clean Architecture · EF Core + SQLite · JWT auth · FluentValidation · Serilog · Swagger
 - **Frontend (separate repo):** React 19 + Vite — see `TaskManagementSystem.FrontEnd`
-- **Deployment:** Docker Compose (SQL Server + API)
+- **Deployment:** Docker Compose (API + SQLite) — single container, data on a persistent volume
 
 Bonus features implemented: **authentication, task prioritisation, drag-and-drop ordering, unit tests, containerisation.**
 
@@ -26,13 +26,44 @@ docker compose up --build
 | Service        | URL                                |
 |----------------|------------------------------------|
 | API + Swagger  | http://localhost:5000/swagger      |
-| SQL Server     | localhost:1433 (sa / TaskManager2026!) |
 
-The API waits for SQL Server to be healthy, then applies EF Core migrations automatically.
+The API uses **SQLite** — no separate database server. On startup it applies EF Core migrations
+automatically and creates the database file. In Docker the file lives at `/data/taskmanager.db`
+on the `sqlite-data` volume, so your data survives container rebuilds and restarts.
 Open Swagger, **register an account**, authorise, and exercise the endpoints — or run the
 frontend repo against it.
 
 To override the default dev secrets, copy `.env.example` to `.env` and edit it.
+
+---
+
+## Deploying
+
+The app ships as a single container (the bundled `Dockerfile`) with SQLite for storage — no separate
+database server to provision. Because SQLite keeps data in a file, the one rule that matters in any
+hosting environment is: **put the database file on persistent storage**, otherwise it resets whenever
+the container is rebuilt or restarted.
+
+1. **Build the image** from the included `Dockerfile`. The app listens on port `8080`
+   (`ASPNETCORE_URLS=http://+:8080`).
+2. **Mount a persistent volume** and point the connection string at a file on it.
+3. **Set environment variables:**
+
+   | Variable | Value |
+   |----------|-------|
+   | `ConnectionStrings__DefaultConnection` | `Data Source=/data/taskmanager.db` (a path on the volume) |
+   | `Jwt__Key` | a long random string (≥32 chars) |
+   | `Cors__AllowedOrigins__0` | your deployed frontend origin |
+   | `ASPNETCORE_ENVIRONMENT` | `Docker` *(skips HTTPS redirection when TLS is terminated by a proxy)* |
+
+4. **Run it.** On first boot the API creates the database file on the volume, applies migrations, and
+   seeds the roles/accounts. Swagger is at `/swagger` on your deployed URL.
+
+`docker compose up --build` does all of this locally — it already mounts the `sqlite-data` volume at
+`/data` for you.
+
+> The seeded demo accounts (`admin@taskmanager.local` / `Admin123!`, etc.) are created on every startup.
+> Change or remove the seeding before any real production use.
 
 ---
 
@@ -49,16 +80,16 @@ dotnet run --project src/TaskManager.API
 
 Swagger UI: **http://localhost:5062/swagger**
 
-To use a real SQL Server instead, start one (e.g. `docker compose -f docker-compose.local.yml up -d`)
-and provide the connection string:
+To use a persistent **SQLite** file instead (data survives restarts), point the connection string at a
+file path — the database and schema are created automatically on first run:
 
 ```bash
 # PowerShell
-$env:ConnectionStrings__DefaultConnection="Server=localhost,1433;Database=TaskManager;User Id=sa;Password=TaskManager2026!;TrustServerCertificate=True;Encrypt=False"
+$env:ConnectionStrings__DefaultConnection="Data Source=taskmanager.db"
 dotnet run --project src/TaskManager.API
 ```
 
-Migrations are applied automatically on startup when a SQL Server connection string is present.
+Migrations are applied automatically on startup whenever a connection string is present.
 
 ### Frontend
 
@@ -109,7 +140,7 @@ src/
   TaskManager.API/             # Controllers, Program.cs, middleware, Swagger
 tests/
   TaskManager.UnitTests/
-Dockerfile · docker-compose.yml · docker-compose.local.yml
+Dockerfile · docker-compose.yml
 ```
 
 > The React frontend (`TaskManagementSystem.FrontEnd`) is maintained in a separate repository.
@@ -122,7 +153,7 @@ See [CLAUDE.md](CLAUDE.md) for architecture notes and conventions.
 
 | Setting | Default | Notes |
 |---------|---------|-------|
-| `ConnectionStrings:DefaultConnection` | *(empty)* | Empty ⇒ in-memory DB; set for SQL Server |
+| `ConnectionStrings:DefaultConnection` | *(empty)* | Empty ⇒ in-memory DB; set to `Data Source=<path>.db` for SQLite |
 | `Jwt:Key` | dev key in `appsettings.Development.json` | **Override in production** (≥32 chars) |
 | `Jwt:Issuer` / `Jwt:Audience` | `TaskManager.API` / `TaskManager.Client` | |
 | `Jwt:ExpiryHours` | `12` | Token lifetime |
