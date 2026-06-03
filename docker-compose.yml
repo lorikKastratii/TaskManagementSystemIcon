@@ -1,0 +1,44 @@
+# ---------------------------------------------------------------------------
+# Backend stack: SQL Server + API.
+#   docker compose up --build
+# Then open:  API/Swagger http://localhost:5000/swagger
+# The React frontend lives in the separate `TaskManagementSystem.FrontEnd` repo
+# and has its own Dockerfile/compose; point its VITE_API_URL at http://localhost:5000/api.
+# Secrets default to dev values but can be overridden via a .env file (see .env.example).
+# ---------------------------------------------------------------------------
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${SA_PASSWORD:-TaskManager2026!}"
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" -b -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Docker"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=TaskManager;User Id=sa;Password=${SA_PASSWORD:-TaskManager2026!};TrustServerCertificate=True;Encrypt=False"
+      Jwt__Key: "${JWT_KEY:-docker-compose-super-secret-jwt-signing-key-change-me-please}"
+      Jwt__Issuer: "TaskManager.API"
+      Jwt__Audience: "TaskManager.Client"
+      Cors__AllowedOrigins__0: "http://localhost:3000"
+    ports:
+      - "5000:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
+volumes:
+  mssql-data:
