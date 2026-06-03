@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TaskManager.API.Common;
+using TaskManager.Application.Ai.Dtos;
+using TaskManager.Application.Ai.Interfaces;
 using TaskManager.Application.Tasks.Dtos;
 using TaskManager.Application.Tasks.Interfaces;
 
@@ -17,10 +19,12 @@ namespace TaskManager.API.Controllers;
 public class TasksController : ControllerBase
 {
     private readonly ITaskService _taskService;
+    private readonly IAiTaskAssistant _aiAssistant;
 
-    public TasksController(ITaskService taskService)
+    public TasksController(ITaskService taskService, IAiTaskAssistant aiAssistant)
     {
         _taskService = taskService;
+        _aiAssistant = aiAssistant;
     }
 
     /// <summary>
@@ -53,6 +57,19 @@ public class TasksController : ControllerBase
     {
         var created = await _taskService.CreateAsync(User.ToCurrentUser(), dto, ct);
         return CreatedAtAction(nameof(GetTask), new { id = created.Id }, created);
+    }
+
+    /// <summary>
+    /// Enhances a draft task description using AI acting as a Product Owner. Stateless — it does
+    /// not touch any task; the client applies the returned text to the form before saving.
+    /// </summary>
+    [HttpPost("enhance-description")]
+    [ProducesResponseType(typeof(EnhancedDescriptionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<EnhancedDescriptionDto>> EnhanceDescription([FromBody] EnhanceDescriptionRequestDto dto, CancellationToken ct)
+    {
+        var enhanced = await _aiAssistant.EnhanceDescriptionAsync(dto, ct);
+        return Ok(enhanced);
     }
 
     /// <summary>Updates an existing task (partial update — only supplied fields change).</summary>

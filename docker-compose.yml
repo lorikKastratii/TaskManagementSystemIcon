@@ -20,6 +20,7 @@ services:
       Jwt__Issuer: "TaskManager.API"
       Jwt__Audience: "TaskManager.Client"
       Cors__AllowedOrigins__0: "http://localhost:3000"
+      OpenAI__ApiKey: "${OPENAI_API_KEY:-}"
     ports:
       - "5000:8080"
     volumes:

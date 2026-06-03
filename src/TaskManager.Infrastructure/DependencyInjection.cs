@@ -1,8 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using TaskManager.Application.Ai;
+using TaskManager.Application.Ai.Interfaces;
 using TaskManager.Application.Tasks.Interfaces;
 using TaskManager.Application.Users.Interfaces;
+using TaskManager.Infrastructure.Ai;
 using TaskManager.Infrastructure.Data;
 using TaskManager.Infrastructure.Identity;
 using TaskManager.Infrastructure.Repositories;
@@ -33,6 +36,11 @@ public static class DependencyInjection
 
         services.AddScoped<ITaskRepository, TaskRepository>();
         services.AddScoped<IUserDirectory, UserDirectory>();
+
+        // AI assistance (OpenAI) — bound from the "OpenAI" config section and exposed as a typed
+        // HttpClient so the Application layer depends only on IAiTaskAssistant.
+        services.Configure<OpenAiSettings>(configuration.GetSection(OpenAiSettings.SectionName));
+        services.AddHttpClient<IAiTaskAssistant, OpenAiTaskAssistant>();
 
         return services;
     }
