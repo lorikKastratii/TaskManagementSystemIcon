@@ -27,7 +27,7 @@ public class UpdateTaskDtoValidator : AbstractValidator<UpdateTaskDto>
         When(x => x.Status.HasValue, () =>
         {
             RuleFor(x => x.Status!.Value)
-                .IsInEnum().WithMessage("Status must be a valid value (Todo, InProgress, Done).");
+                .IsInEnum().WithMessage("Status must be a valid value (Todo, InProgress, InReview, Done).");
         });
 
         When(x => x.Priority.HasValue, () =>

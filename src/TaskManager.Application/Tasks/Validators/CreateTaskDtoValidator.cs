@@ -16,7 +16,7 @@ public class CreateTaskDtoValidator : AbstractValidator<CreateTaskDto>
             .MaximumLength(1000).WithMessage("Description must not exceed 1000 characters.");
 
         RuleFor(x => x.Status)
-            .IsInEnum().WithMessage("Status must be a valid value (Todo, InProgress, Done).");
+            .IsInEnum().WithMessage("Status must be a valid value (Todo, InProgress, InReview, Done).");
 
         RuleFor(x => x.Priority)
             .IsInEnum().WithMessage("Priority must be a valid value (Low, Medium, High).");
