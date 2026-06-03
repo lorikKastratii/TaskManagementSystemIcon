@@ -37,6 +37,7 @@ public class TaskItemBuilder
     public TaskItemBuilder WithStatus(TaskItemStatus status) { _task.Status = status; return this; }
     public TaskItemBuilder WithPriority(TaskPriority priority) { _task.Priority = priority; return this; }
     public TaskItemBuilder WithSortOrder(int order) { _task.SortOrder = order; return this; }
+    public TaskItemBuilder WithDueDate(DateTime? dueDate) { _task.DueDate = dueDate; return this; }
     public TaskItemBuilder Completed(bool completed = true) { _task.SetCompletion(completed); return this; }
 
     public TaskItem Build() => _task;

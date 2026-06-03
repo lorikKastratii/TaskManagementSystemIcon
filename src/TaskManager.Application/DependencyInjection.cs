@@ -2,6 +2,8 @@ using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using TaskManager.Application.Auth.Interfaces;
 using TaskManager.Application.Auth.Services;
+using TaskManager.Application.Stats.Interfaces;
+using TaskManager.Application.Stats.Services;
 using TaskManager.Application.Tasks.Interfaces;
 using TaskManager.Application.Tasks.Services;
 
@@ -16,6 +18,7 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<ITaskService, TaskService>();
+        services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<ITokenService, TokenService>();
 
         // Discover and register every AbstractValidator in this assembly.
