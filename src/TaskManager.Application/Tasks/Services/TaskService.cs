@@ -139,8 +139,6 @@ public class TaskService : ITaskService
         _logger.LogInformation("User {UserId} deleted task {TaskId}", caller.Id, id);
     }
 
-    // ----------------------------------------------------------------- filtering
-
     private static IEnumerable<TaskItem> ApplyFilters(IEnumerable<TaskItem> tasks, TaskQueryParameters query)
     {
         if (!string.IsNullOrWhiteSpace(query.AssigneeId))
@@ -177,8 +175,6 @@ public class TaskService : ITaskService
         return task.Title.Contains(term, StringComparison.OrdinalIgnoreCase)
             || (task.Description is not null && task.Description.Contains(term, StringComparison.OrdinalIgnoreCase));
     }
-
-    // ----------------------------------------------------------------- write helpers
 
     private async Task PersistAsync(TaskItem task, CancellationToken ct)
     {
@@ -228,8 +224,6 @@ public class TaskService : ITaskService
 
         return changed;
     }
-
-    // ----------------------------------------------------------------- read helpers
 
     private async Task<TaskItem> LoadAccessibleAsync(Guid id, CancellationToken ct)
     {
