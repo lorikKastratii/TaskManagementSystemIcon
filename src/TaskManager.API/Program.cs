@@ -51,6 +51,7 @@ builder.Services
         options.Password.RequireNonAlphanumeric = false;
         options.User.RequireUniqueEmail = true;
     })
+    .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<TaskDbContext>();
 
 // ---------------------------------------------------------------------------
@@ -135,6 +136,9 @@ using (var scope = app.Services.CreateScope())
     {
         db.Database.Migrate();
     }
+
+    // Seed roles and the initial accounts (admin + test1/test2/test3). Idempotent.
+    await IdentitySeeder.SeedAsync(scope.ServiceProvider);
 }
 
 // ---------------------------------------------------------------------------

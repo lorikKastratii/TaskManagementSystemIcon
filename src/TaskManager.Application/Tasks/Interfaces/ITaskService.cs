@@ -1,19 +1,26 @@
+using TaskManager.Application.Common;
 using TaskManager.Application.Tasks.Dtos;
 
 namespace TaskManager.Application.Tasks.Interfaces;
 
 /// <summary>
-/// Application service exposing task use-cases to the API layer. Every operation is scoped
-/// to a user id (extracted from the JWT) and throws NotFoundException when a task is missing
-/// or owned by someone else, ensuring callers cannot probe other users' data.
+/// Application service exposing task use-cases to the API layer. Every operation takes the
+/// authenticated <see cref="CurrentUser"/>: a regular user may only see and mutate tasks
+/// assigned to them, while an admin may see all tasks and (re)assign them to any user.
+/// Operations throw NotFoundException when a task is missing or out of the caller's reach,
+/// so callers cannot probe other users' data.
 /// </summary>
 public interface ITaskService
 {
-    Task<IReadOnlyList<TaskDto>> GetTasksAsync(string userId, TaskQueryParameters query, CancellationToken ct = default);
-    Task<TaskDto> GetByIdAsync(string userId, Guid id, CancellationToken ct = default);
-    Task<TaskDto> CreateAsync(string userId, CreateTaskDto dto, CancellationToken ct = default);
-    Task<TaskDto> UpdateAsync(string userId, Guid id, UpdateTaskDto dto, CancellationToken ct = default);
-    Task<TaskDto> SetCompletionAsync(string userId, Guid id, bool isCompleted, CancellationToken ct = default);
-    Task ReorderAsync(string userId, ReorderTasksDto dto, CancellationToken ct = default);
-    Task DeleteAsync(string userId, Guid id, CancellationToken ct = default);
+    Task<IReadOnlyList<TaskDto>> GetTasksAsync(CurrentUser caller, TaskQueryParameters query, CancellationToken ct = default);
+    Task<TaskDto> GetByIdAsync(CurrentUser caller, Guid id, CancellationToken ct = default);
+    Task<TaskDto> CreateAsync(CurrentUser caller, CreateTaskDto dto, CancellationToken ct = default);
+    Task<TaskDto> UpdateAsync(CurrentUser caller, Guid id, UpdateTaskDto dto, CancellationToken ct = default);
+    Task<TaskDto> SetCompletionAsync(CurrentUser caller, Guid id, bool isCompleted, CancellationToken ct = default);
+
+    /// <summary>Admin-only: (re)assigns a task to a user (or unassigns when assigneeId is null).</summary>
+    Task<TaskDto> AssignAsync(CurrentUser caller, Guid id, string? assigneeId, CancellationToken ct = default);
+
+    Task ReorderAsync(CurrentUser caller, ReorderTasksDto dto, CancellationToken ct = default);
+    Task DeleteAsync(CurrentUser caller, Guid id, CancellationToken ct = default);
 }

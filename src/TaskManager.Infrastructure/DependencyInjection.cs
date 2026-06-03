@@ -2,7 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TaskManager.Application.Tasks.Interfaces;
+using TaskManager.Application.Users.Interfaces;
 using TaskManager.Infrastructure.Data;
+using TaskManager.Infrastructure.Identity;
 using TaskManager.Infrastructure.Repositories;
 
 namespace TaskManager.Infrastructure;
@@ -30,6 +32,7 @@ public static class DependencyInjection
         });
 
         services.AddScoped<ITaskRepository, TaskRepository>();
+        services.AddScoped<IUserDirectory, UserDirectory>();
 
         return services;
     }

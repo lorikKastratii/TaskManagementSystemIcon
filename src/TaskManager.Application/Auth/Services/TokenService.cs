@@ -20,18 +20,21 @@ public class TokenService : ITokenService
         _settings = settings.Value;
     }
 
-    public (string Token, DateTime ExpiresAt) CreateToken(string userId, string email)
+    public (string Token, DateTime ExpiresAt) CreateToken(string userId, string email, IEnumerable<string> roles)
     {
         var expiresAt = DateTime.UtcNow.AddHours(_settings.ExpiryHours);
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, userId),
-            new Claim(ClaimTypes.NameIdentifier, userId),
-            new Claim(JwtRegisteredClaimNames.Email, email),
-            new Claim(ClaimTypes.Name, email),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new(JwtRegisteredClaimNames.Sub, userId),
+            new(ClaimTypes.NameIdentifier, userId),
+            new(JwtRegisteredClaimNames.Email, email),
+            new(ClaimTypes.Name, email),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
+
+        // One role claim per role so [Authorize(Roles = "...")] and ClaimsPrincipal.IsInRole work.
+        claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Key));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

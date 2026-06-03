@@ -22,7 +22,13 @@ public class TaskDbContext : IdentityDbContext<ApplicationUser>
 
         builder.ApplyConfigurationsFromAssembly(typeof(TaskDbContext).Assembly);
 
-        // A user owns many tasks; deleting a user removes their tasks.
+        builder.Entity<ApplicationUser>()
+            .Property(u => u.DisplayName)
+            .HasMaxLength(100);
+
+        // A user owns (created) many tasks; deleting a user removes the tasks they created.
+        // AssigneeId is intentionally a plain column (no cascade) so removing a user does not
+        // delete tasks merely assigned to them.
         builder.Entity<ApplicationUser>()
             .HasMany(u => u.Tasks)
             .WithOne()

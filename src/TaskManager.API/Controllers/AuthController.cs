@@ -49,7 +49,10 @@ public class AuthController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
-        return Ok(BuildAuthResponse(user));
+        // Self-registered accounts get the standard User role.
+        await _userManager.AddToRoleAsync(user, "User");
+
+        return Ok(await BuildAuthResponseAsync(user));
     }
 
     /// <summary>Authenticates an existing user and returns an access token.</summary>
@@ -70,10 +73,10 @@ public class AuthController : ControllerBase
             });
         }
 
-        return Ok(BuildAuthResponse(user));
+        return Ok(await BuildAuthResponseAsync(user));
     }
 
-    /// <summary>Returns the currently authenticated user's basic profile.</summary>
+    /// <summary>Returns the currently authenticated user's basic profile, including roles.</summary>
     [HttpGet("me")]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -82,19 +85,22 @@ public class AuthController : ControllerBase
         return Ok(new
         {
             id = User.GetUserId(),
-            email = User.Identity?.Name
+            email = User.Identity?.Name,
+            roles = User.GetRoles()
         });
     }
 
-    private AuthResponseDto BuildAuthResponse(ApplicationUser user)
+    private async Task<AuthResponseDto> BuildAuthResponseAsync(ApplicationUser user)
     {
-        var (token, expiresAt) = _tokenService.CreateToken(user.Id, user.Email!);
+        var roles = await _userManager.GetRolesAsync(user);
+        var (token, expiresAt) = _tokenService.CreateToken(user.Id, user.Email!, roles);
         return new AuthResponseDto
         {
             Token = token,
             ExpiresAt = expiresAt,
             UserId = user.Id,
-            Email = user.Email!
+            Email = user.Email!,
+            Roles = roles.ToArray()
         };
     }
 }

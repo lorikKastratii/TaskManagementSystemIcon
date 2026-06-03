@@ -19,4 +19,10 @@ public record TaskQueryParameters
 
     /// <summary>Case-insensitive substring match against title and description.</summary>
     public string? Search { get; init; }
+
+    /// <summary>
+    /// Admin-only: restrict results to tasks assigned to this user id. Ignored for non-admin
+    /// callers, who only ever see the tasks assigned to themselves.
+    /// </summary>
+    public string? AssigneeId { get; init; }
 }

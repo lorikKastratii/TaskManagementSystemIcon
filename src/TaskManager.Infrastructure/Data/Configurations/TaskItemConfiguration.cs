@@ -37,11 +37,15 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
         builder.Property(t => t.UserId)
             .IsRequired();
 
+        // Nullable: a task may be unassigned. Length matches Identity's string key.
+        builder.Property(t => t.AssigneeId)
+            .HasMaxLength(450);
+
         builder.Property(t => t.CreatedAt)
             .IsRequired();
 
-        // Most common query is "all tasks for a user, filtered by status" — index accordingly.
+        // Most common query is "all tasks for an assignee, ordered" — index accordingly.
+        builder.HasIndex(t => new { t.AssigneeId, t.SortOrder });
         builder.HasIndex(t => new { t.UserId, t.Status });
-        builder.HasIndex(t => new { t.UserId, t.SortOrder });
     }
 }

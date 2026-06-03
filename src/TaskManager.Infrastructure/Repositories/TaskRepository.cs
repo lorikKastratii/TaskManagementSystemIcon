@@ -6,8 +6,9 @@ using TaskManager.Infrastructure.Data;
 namespace TaskManager.Infrastructure.Repositories;
 
 /// <summary>
-/// EF Core implementation of <see cref="ITaskRepository"/>. Every read is filtered by UserId
-/// at the database level so a user can never load another user's tasks.
+/// EF Core implementation of <see cref="ITaskRepository"/>. Provides per-assignee reads for
+/// regular users and a full-table read for admins. Access decisions for individual tasks are
+/// made by the service layer.
 /// </summary>
 public class TaskRepository : ITaskRepository
 {
@@ -18,30 +19,38 @@ public class TaskRepository : ITaskRepository
         _db = db;
     }
 
-    public async Task<IReadOnlyList<TaskItem>> GetAllAsync(string userId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<TaskItem>> GetAllAsync(CancellationToken ct = default)
     {
         return await _db.Tasks
-            .Where(t => t.UserId == userId)
             .OrderBy(t => t.SortOrder)
             .ThenByDescending(t => t.CreatedAt)
             .ToListAsync(ct);
     }
 
-    public Task<TaskItem?> GetByIdAsync(string userId, Guid id, CancellationToken ct = default)
+    public async Task<IReadOnlyList<TaskItem>> GetForAssigneeAsync(string assigneeId, CancellationToken ct = default)
     {
-        return _db.Tasks.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId, ct);
+        return await _db.Tasks
+            .Where(t => t.AssigneeId == assigneeId)
+            .OrderBy(t => t.SortOrder)
+            .ThenByDescending(t => t.CreatedAt)
+            .ToListAsync(ct);
     }
 
-    public async Task<int> GetMaxSortOrderAsync(string userId, CancellationToken ct = default)
+    public Task<TaskItem?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        var hasTasks = await _db.Tasks.AnyAsync(t => t.UserId == userId, ct);
+        return _db.Tasks.FirstOrDefaultAsync(t => t.Id == id, ct);
+    }
+
+    public async Task<int> GetMaxSortOrderAsync(string assigneeId, CancellationToken ct = default)
+    {
+        var hasTasks = await _db.Tasks.AnyAsync(t => t.AssigneeId == assigneeId, ct);
         if (!hasTasks)
         {
             return 0;
         }
 
         return await _db.Tasks
-            .Where(t => t.UserId == userId)
+            .Where(t => t.AssigneeId == assigneeId)
             .MaxAsync(t => t.SortOrder, ct);
     }
 

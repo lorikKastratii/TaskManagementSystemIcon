@@ -34,8 +34,15 @@ public class TaskItem : BaseEntity
     /// <summary>Manual ordering position within the owner's list (supports drag-and-drop sorting).</summary>
     public int SortOrder { get; set; }
 
-    /// <summary>Identifier of the owning user (ASP.NET Identity user id). Enforces per-user isolation.</summary>
+    /// <summary>Identifier of the user who created the task (ASP.NET Identity user id). Acts as the owner.</summary>
     public string UserId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Identifier of the user the task is currently assigned to (ASP.NET Identity user id).
+    /// A regular user sees the tasks assigned to them; an admin can (re)assign to anyone.
+    /// Null means unassigned. New tasks default to being assigned to their creator.
+    /// </summary>
+    public string? AssigneeId { get; set; }
 
     /// <summary>
     /// Marks the task as complete or incomplete, keeping <see cref="Status"/> consistent.
