@@ -6,9 +6,8 @@ using TaskManager.Infrastructure.Data;
 namespace TaskManager.Infrastructure.Repositories;
 
 /// <summary>
-/// EF Core implementation of <see cref="ITaskRepository"/>. Provides per-assignee reads for
-/// regular users and a full-table read for admins. Access decisions for individual tasks are
-/// made by the service layer.
+/// EF Core implementation of <see cref="ITaskRepository"/>. Writes register changes on the
+/// context; the <see cref="UnitOfWork"/> commits them.
 /// </summary>
 public class TaskRepository : ITaskRepository
 {
@@ -21,19 +20,13 @@ public class TaskRepository : ITaskRepository
 
     public async Task<IReadOnlyList<TaskItem>> GetAllAsync(CancellationToken ct = default)
     {
-        return await _db.Tasks
-            .OrderBy(t => t.SortOrder)
-            .ThenByDescending(t => t.CreatedAt)
-            .ToListAsync(ct);
+        return await OrderedTasks(_db.Tasks).ToListAsync(ct);
     }
 
     public async Task<IReadOnlyList<TaskItem>> GetForAssigneeAsync(string assigneeId, CancellationToken ct = default)
     {
-        return await _db.Tasks
-            .Where(t => t.AssigneeId == assigneeId)
-            .OrderBy(t => t.SortOrder)
-            .ThenByDescending(t => t.CreatedAt)
-            .ToListAsync(ct);
+        var query = _db.Tasks.Where(t => t.AssigneeId == assigneeId);
+        return await OrderedTasks(query).ToListAsync(ct);
     }
 
     public Task<TaskItem?> GetByIdAsync(Guid id, CancellationToken ct = default)
@@ -43,38 +36,27 @@ public class TaskRepository : ITaskRepository
 
     public async Task<int> GetMaxSortOrderAsync(string assigneeId, CancellationToken ct = default)
     {
-        var hasTasks = await _db.Tasks.AnyAsync(t => t.AssigneeId == assigneeId, ct);
-        if (!hasTasks)
+        var assigneeTasks = _db.Tasks.Where(t => t.AssigneeId == assigneeId);
+        if (!await assigneeTasks.AnyAsync(ct))
         {
             return 0;
         }
 
-        return await _db.Tasks
-            .Where(t => t.AssigneeId == assigneeId)
-            .MaxAsync(t => t.SortOrder, ct);
+        return await assigneeTasks.MaxAsync(t => t.SortOrder, ct);
     }
 
-    public async Task AddAsync(TaskItem task, CancellationToken ct = default)
-    {
-        _db.Tasks.Add(task);
-        await _db.SaveChangesAsync(ct);
-    }
+    public void Add(TaskItem task) => _db.Tasks.Add(task);
 
-    public async Task UpdateAsync(TaskItem task, CancellationToken ct = default)
-    {
-        _db.Tasks.Update(task);
-        await _db.SaveChangesAsync(ct);
-    }
+    public void Update(TaskItem task) => _db.Tasks.Update(task);
 
-    public async Task UpdateRangeAsync(IEnumerable<TaskItem> tasks, CancellationToken ct = default)
-    {
-        _db.Tasks.UpdateRange(tasks);
-        await _db.SaveChangesAsync(ct);
-    }
+    public void UpdateRange(IEnumerable<TaskItem> tasks) => _db.Tasks.UpdateRange(tasks);
 
-    public async Task DeleteAsync(TaskItem task, CancellationToken ct = default)
+    public void Remove(TaskItem task) => _db.Tasks.Remove(task);
+
+    private static IQueryable<TaskItem> OrderedTasks(IQueryable<TaskItem> query)
     {
-        _db.Tasks.Remove(task);
-        await _db.SaveChangesAsync(ct);
+        return query
+            .OrderBy(t => t.SortOrder)
+            .ThenByDescending(t => t.CreatedAt);
     }
 }

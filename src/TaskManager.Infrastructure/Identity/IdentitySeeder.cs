@@ -29,15 +29,26 @@ public static class IdentitySeeder
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
         var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("IdentitySeeder");
 
+        await SeedRolesAsync(roleManager, logger);
+        await SeedUsersAsync(userManager, logger);
+    }
+
+    private static async Task SeedRolesAsync(RoleManager<IdentityRole> roleManager, ILogger logger)
+    {
         foreach (var role in new[] { AdminRole, UserRole })
         {
-            if (!await roleManager.RoleExistsAsync(role))
+            if (await roleManager.RoleExistsAsync(role))
             {
-                await roleManager.CreateAsync(new IdentityRole(role));
-                logger.LogInformation("Seeded role {Role}", role);
+                continue;
             }
-        }
 
+            await roleManager.CreateAsync(new IdentityRole(role));
+            logger.LogInformation("Seeded role {Role}", role);
+        }
+    }
+
+    private static async Task SeedUsersAsync(UserManager<ApplicationUser> userManager, ILogger logger)
+    {
         foreach (var seed in SeedUsers)
         {
             if (await userManager.FindByEmailAsync(seed.Email) is not null)

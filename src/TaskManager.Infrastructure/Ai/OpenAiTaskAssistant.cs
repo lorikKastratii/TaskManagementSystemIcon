@@ -43,12 +43,24 @@ public class OpenAiTaskAssistant : IAiTaskAssistant
     public async Task<EnhancedDescriptionDto> EnhanceDescriptionAsync(EnhanceDescriptionRequestDto request, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(_settings.ApiKey))
+        {
             throw new ValidationException("ai", "AI enhancement is not configured on the server.");
+        }
 
+        var payload = BuildRequestPayload(request);
+        var response = await SendAsync(payload, ct);
+        var text = await ReadCompletionTextAsync(response, ct);
+
+        _logger.LogInformation("Enhanced a task description via OpenAI ({Model}).", _settings.Model);
+        return new EnhancedDescriptionDto { Description = text };
+    }
+
+    private ChatRequest BuildRequestPayload(EnhanceDescriptionRequestDto request)
+    {
         var draft = string.IsNullOrWhiteSpace(request.Description) ? "(no description yet)" : request.Description!.Trim();
         var userPrompt = $"Task title: {request.Title.Trim()}\n\nCurrent description:\n{draft}";
 
-        var payload = new ChatRequest(
+        return new ChatRequest(
             Model: _settings.Model,
             Messages: new[]
             {
@@ -57,24 +69,29 @@ public class OpenAiTaskAssistant : IAiTaskAssistant
             },
             Temperature: 0.7,
             MaxTokens: _settings.MaxOutputTokens);
+    }
 
+    private async Task<HttpResponseMessage> SendAsync(ChatRequest payload, CancellationToken ct)
+    {
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
         {
             Content = JsonContent.Create(payload),
         };
         httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _settings.ApiKey);
 
-        HttpResponseMessage response;
         try
         {
-            response = await _http.SendAsync(httpRequest, ct);
+            return await _http.SendAsync(httpRequest, ct);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
         {
             _logger.LogError(ex, "Failed to reach OpenAI for description enhancement.");
             throw new ValidationException("ai", "Could not reach the AI service. Please try again.");
         }
+    }
 
+    private async Task<string> ReadCompletionTextAsync(HttpResponseMessage response, CancellationToken ct)
+    {
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(ct);
@@ -91,11 +108,10 @@ public class OpenAiTaskAssistant : IAiTaskAssistant
             throw new ValidationException("ai", "The AI service returned an empty response. Please try again.");
         }
 
-        _logger.LogInformation("Enhanced a task description via OpenAI ({Model}).", _settings.Model);
-        return new EnhancedDescriptionDto { Description = text };
+        return text;
     }
 
-    // --- Minimal OpenAI Chat Completions request/response shapes (only the fields we use). ---
+    // Minimal OpenAI Chat Completions request/response shapes (only the fields we use).
 
     private record ChatRequest(
         [property: JsonPropertyName("model")] string Model,

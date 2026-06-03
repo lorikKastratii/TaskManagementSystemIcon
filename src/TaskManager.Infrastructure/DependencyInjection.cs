@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TaskManager.Application.Ai;
 using TaskManager.Application.Ai.Interfaces;
+using TaskManager.Application.Common.Interfaces;
 using TaskManager.Application.Tasks.Interfaces;
 using TaskManager.Application.Users.Interfaces;
 using TaskManager.Infrastructure.Ai;
@@ -35,6 +36,7 @@ public static class DependencyInjection
         });
 
         services.AddScoped<ITaskRepository, TaskRepository>();
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IUserDirectory, UserDirectory>();
 
         // AI assistance (OpenAI) — bound from the "OpenAI" config section and exposed as a typed
