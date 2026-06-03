@@ -7,9 +7,8 @@ using TaskManager.UnitTests.Builders;
 namespace TaskManager.UnitTests.Tasks;
 
 /// <summary>
-/// Integration-style tests for <see cref="TaskRepository"/> against the EF Core InMemory
-/// provider. Primary purpose: prove that a regular user's reads are scoped to the tasks
-/// assigned to them, while the admin read returns everything.
+/// Integration-style tests for <see cref="TaskRepository"/> against the EF Core InMemory provider:
+/// read ordering/scoping and the unit-of-work commit boundary for writes.
 /// </summary>
 public class TaskRepositoryTests
 {
@@ -78,6 +77,23 @@ public class TaskRepositoryTests
         var max = await repo.GetMaxSortOrderAsync("nobody");
 
         max.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Add_ShouldPersist_OnlyAfterUnitOfWorkCommits()
+    {
+        await using var db = NewContext();
+        var repo = new TaskRepository(db);
+        var unitOfWork = new UnitOfWork(db);
+        var task = TaskItemBuilder.ForUser("alice").Build();
+
+        repo.Add(task);
+        // Registered but not yet committed — the store is still empty.
+        (await repo.GetAllAsync()).Should().BeEmpty();
+
+        await unitOfWork.SaveChangesAsync();
+
+        (await repo.GetByIdAsync(task.Id)).Should().NotBeNull();
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using TaskManager.Application.Common;
 using TaskManager.Application.Common.Exceptions;
+using TaskManager.Application.Common.Interfaces;
 using TaskManager.Application.Tasks.Dtos;
 using TaskManager.Application.Tasks.Interfaces;
 using TaskManager.Application.Tasks.Services;
@@ -28,6 +29,7 @@ public class TaskServiceTests
     private static readonly CurrentUser Admin = new("admin-1", IsAdmin: true);
 
     private readonly Mock<ITaskRepository> _repository = new();
+    private readonly Mock<IUnitOfWork> _unitOfWork = new();
     private readonly Mock<IUserDirectory> _users = new();
     private readonly TaskService _sut;
 
@@ -38,8 +40,9 @@ public class TaskServiceTests
             .ReturnsAsync((string id, CancellationToken _) => new UserSummaryDto { Id = id, DisplayName = id });
         _users.Setup(u => u.GetAllAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<UserSummaryDto>());
+        _unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
-        _sut = new TaskService(_repository.Object, _users.Object, NullLogger<TaskService>.Instance);
+        _sut = new TaskService(_repository.Object, _unitOfWork.Object, _users.Object, NullLogger<TaskService>.Instance);
     }
 
     // ---------------------------------------------------------------- GetTasks (filtering / scope)
@@ -178,9 +181,8 @@ public class TaskServiceTests
     {
         _repository.Setup(r => r.GetMaxSortOrderAsync(UserId, It.IsAny<CancellationToken>())).ReturnsAsync(4);
         TaskItem? saved = null;
-        _repository.Setup(r => r.AddAsync(It.IsAny<TaskItem>(), It.IsAny<CancellationToken>()))
-            .Callback<TaskItem, CancellationToken>((t, _) => saved = t)
-            .Returns(Task.CompletedTask);
+        _repository.Setup(r => r.Add(It.IsAny<TaskItem>()))
+            .Callback<TaskItem>(t => saved = t);
 
         var dto = new CreateTaskDto { Title = "New", Priority = TaskPriority.High };
 
@@ -199,9 +201,8 @@ public class TaskServiceTests
     {
         _repository.Setup(r => r.GetMaxSortOrderAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
         TaskItem? saved = null;
-        _repository.Setup(r => r.AddAsync(It.IsAny<TaskItem>(), It.IsAny<CancellationToken>()))
-            .Callback<TaskItem, CancellationToken>((t, _) => saved = t)
-            .Returns(Task.CompletedTask);
+        _repository.Setup(r => r.Add(It.IsAny<TaskItem>()))
+            .Callback<TaskItem>(t => saved = t);
 
         await _sut.CreateAsync(User, new CreateTaskDto { Title = "x", AssigneeId = OtherId });
 
@@ -213,9 +214,8 @@ public class TaskServiceTests
     {
         _repository.Setup(r => r.GetMaxSortOrderAsync(OtherId, It.IsAny<CancellationToken>())).ReturnsAsync(0);
         TaskItem? saved = null;
-        _repository.Setup(r => r.AddAsync(It.IsAny<TaskItem>(), It.IsAny<CancellationToken>()))
-            .Callback<TaskItem, CancellationToken>((t, _) => saved = t)
-            .Returns(Task.CompletedTask);
+        _repository.Setup(r => r.Add(It.IsAny<TaskItem>()))
+            .Callback<TaskItem>(t => saved = t);
 
         await _sut.CreateAsync(Admin, new CreateTaskDto { Title = "x", AssigneeId = OtherId });
 
@@ -236,7 +236,6 @@ public class TaskServiceTests
     public async Task CreateAsync_ShouldMarkCompleted_WhenStatusIsDone()
     {
         _repository.Setup(r => r.GetMaxSortOrderAsync(UserId, It.IsAny<CancellationToken>())).ReturnsAsync(0);
-        _repository.Setup(r => r.AddAsync(It.IsAny<TaskItem>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
         var result = await _sut.CreateAsync(User, new CreateTaskDto { Title = "Done one", Status = TaskItemStatus.Done });
 
@@ -250,7 +249,6 @@ public class TaskServiceTests
     {
         var existing = TaskItemBuilder.ForUser(UserId).WithTitle("Original").WithPriority(TaskPriority.Low).Build();
         _repository.Setup(r => r.GetByIdAsync(existing.Id, It.IsAny<CancellationToken>())).ReturnsAsync(existing);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
         var result = await _sut.UpdateAsync(User, existing.Id, new UpdateTaskDto { Title = "Renamed" });
 
@@ -265,7 +263,6 @@ public class TaskServiceTests
         // Shared board: any user may edit a task assigned to someone else.
         var othersTask = TaskItemBuilder.ForUser(OtherId).WithTitle("Original").Build();
         _repository.Setup(r => r.GetByIdAsync(othersTask.Id, It.IsAny<CancellationToken>())).ReturnsAsync(othersTask);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
         var result = await _sut.UpdateAsync(User, othersTask.Id, new UpdateTaskDto { Title = "Renamed" });
 
@@ -279,7 +276,6 @@ public class TaskServiceTests
     {
         var task = TaskItemBuilder.ForUser(UserId).WithStatus(TaskItemStatus.InProgress).Build();
         _repository.Setup(r => r.GetByIdAsync(task.Id, It.IsAny<CancellationToken>())).ReturnsAsync(task);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
         var result = await _sut.SetCompletionAsync(User, task.Id, true);
 
@@ -292,7 +288,6 @@ public class TaskServiceTests
     {
         var task = TaskItemBuilder.ForUser(UserId).WithStatus(TaskItemStatus.Done).Completed().Build();
         _repository.Setup(r => r.GetByIdAsync(task.Id, It.IsAny<CancellationToken>())).ReturnsAsync(task);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
         var result = await _sut.SetCompletionAsync(User, task.Id, false);
 
@@ -308,13 +303,12 @@ public class TaskServiceTests
         var task = TaskItemBuilder.ForUser(UserId).Build();
         _repository.Setup(r => r.GetByIdAsync(task.Id, It.IsAny<CancellationToken>())).ReturnsAsync(task);
         _repository.Setup(r => r.GetMaxSortOrderAsync(OtherId, It.IsAny<CancellationToken>())).ReturnsAsync(2);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
         var result = await _sut.AssignAsync(Admin, task.Id, OtherId);
 
         result.AssigneeId.Should().Be(OtherId);
         task.SortOrder.Should().Be(3); // appended to end of new assignee's list
-        _repository.Verify(r => r.UpdateAsync(task, It.IsAny<CancellationToken>()), Times.Once);
+        _repository.Verify(r => r.Update(task), Times.Once);
     }
 
     [Fact]
@@ -349,9 +343,8 @@ public class TaskServiceTests
         var b = TaskItemBuilder.ForUser(UserId).WithSortOrder(1).Build();
         _repository.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new[] { a, b });
         IEnumerable<TaskItem>? updated = null;
-        _repository.Setup(r => r.UpdateRangeAsync(It.IsAny<IEnumerable<TaskItem>>(), It.IsAny<CancellationToken>()))
-            .Callback<IEnumerable<TaskItem>, CancellationToken>((t, _) => updated = t.ToList())
-            .Returns(Task.CompletedTask);
+        _repository.Setup(r => r.UpdateRange(It.IsAny<IEnumerable<TaskItem>>()))
+            .Callback<IEnumerable<TaskItem>>(t => updated = t.ToList());
 
         await _sut.ReorderAsync(User, new ReorderTasksDto { OrderedTaskIds = new[] { b.Id, a.Id, Guid.NewGuid() } });
 
@@ -372,7 +365,7 @@ public class TaskServiceTests
         var act = () => _sut.DeleteAsync(User, Guid.NewGuid());
 
         await act.Should().ThrowAsync<NotFoundException>();
-        _repository.Verify(r => r.DeleteAsync(It.IsAny<TaskItem>(), It.IsAny<CancellationToken>()), Times.Never);
+        _repository.Verify(r => r.Remove(It.IsAny<TaskItem>()), Times.Never);
     }
 
     [Fact]
@@ -380,10 +373,10 @@ public class TaskServiceTests
     {
         var task = TaskItemBuilder.ForUser(UserId).Build();
         _repository.Setup(r => r.GetByIdAsync(task.Id, It.IsAny<CancellationToken>())).ReturnsAsync(task);
-        _repository.Setup(r => r.DeleteAsync(task, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
         await _sut.DeleteAsync(User, task.Id);
 
-        _repository.Verify(r => r.DeleteAsync(task, It.IsAny<CancellationToken>()), Times.Once);
+        _repository.Verify(r => r.Remove(task), Times.Once);
+        _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 }
