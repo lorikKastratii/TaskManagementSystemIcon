@@ -141,6 +141,11 @@ ipch/
 *.VC.db
 *.VC.VC.opendb
 
+# Local SQLite database files (created at runtime; never commit)
+*.db
+*.db-shm
+*.db-wal
+
 # Visual Studio profiler
 *.psess
 *.vsp

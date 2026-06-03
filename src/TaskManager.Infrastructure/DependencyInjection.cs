@@ -22,12 +22,12 @@ public static class DependencyInjection
         {
             if (string.IsNullOrWhiteSpace(connectionString))
             {
-                // Fallback used by quick local runs and tests when no SQL Server is configured.
+                // Fallback used by quick local runs and tests when no database is configured.
                 options.UseInMemoryDatabase("TaskManagerDb");
             }
             else
             {
-                options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure());
+                options.UseSqlite(connectionString);
             }
         });
 
