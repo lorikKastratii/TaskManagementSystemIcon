@@ -10,8 +10,11 @@ namespace TaskManager.Application.Tasks.Mapping;
 /// </summary>
 public static class TaskMappings
 {
-    /// <summary>Projects an entity to its read DTO.</summary>
-    public static TaskDto ToDto(this TaskItem task) => new()
+    /// <summary>
+    /// Projects an entity to its read DTO. The assignee's display name is resolved by the caller
+    /// (it lives in Identity, outside the entity) and passed in; null leaves AssigneeName empty.
+    /// </summary>
+    public static TaskDto ToDto(this TaskItem task, string? assigneeName = null) => new()
     {
         Id = task.Id,
         Title = task.Title,
@@ -21,6 +24,8 @@ public static class TaskMappings
         DueDate = task.DueDate,
         IsCompleted = task.IsCompleted,
         SortOrder = task.SortOrder,
+        AssigneeId = task.AssigneeId,
+        AssigneeName = assigneeName,
         CreatedAt = task.CreatedAt,
         UpdatedAt = task.UpdatedAt
     };

@@ -10,5 +10,8 @@ namespace TaskManager.Infrastructure.Identity;
 /// </summary>
 public class ApplicationUser : IdentityUser
 {
+    /// <summary>Friendly display name shown in the UI (e.g. "test1"). Falls back to the email when unset.</summary>
+    public string? DisplayName { get; set; }
+
     public ICollection<TaskItem> Tasks { get; set; } = new List<TaskItem>();
 }

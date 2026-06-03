@@ -4,8 +4,9 @@ namespace TaskManager.Application.Auth.Interfaces;
 public interface ITokenService
 {
     /// <summary>
-    /// Builds a signed JWT for the given user.
+    /// Builds a signed JWT for the given user, embedding their roles as role claims so the API
+    /// can authorise by role and the client can adapt its UI.
     /// </summary>
     /// <returns>The encoded token and its UTC expiry.</returns>
-    (string Token, DateTime ExpiresAt) CreateToken(string userId, string email);
+    (string Token, DateTime ExpiresAt) CreateToken(string userId, string email, IEnumerable<string> roles);
 }

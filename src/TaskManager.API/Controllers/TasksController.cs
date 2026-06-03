@@ -23,12 +23,15 @@ public class TasksController : ControllerBase
         _taskService = taskService;
     }
 
-    /// <summary>Lists the caller's tasks, optionally filtered by status, priority, completion or search term.</summary>
+    /// <summary>
+    /// Lists tasks the caller may see — for a regular user the tasks assigned to them, for an
+    /// admin every task — optionally filtered by status, priority, completion, search or assignee.
+    /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<TaskDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<TaskDto>>> GetTasks([FromQuery] TaskQueryParameters query, CancellationToken ct)
     {
-        var tasks = await _taskService.GetTasksAsync(User.GetUserId(), query, ct);
+        var tasks = await _taskService.GetTasksAsync(User.ToCurrentUser(), query, ct);
         return Ok(tasks);
     }
 
@@ -38,17 +41,17 @@ public class TasksController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<TaskDto>> GetTask(Guid id, CancellationToken ct)
     {
-        var task = await _taskService.GetByIdAsync(User.GetUserId(), id, ct);
+        var task = await _taskService.GetByIdAsync(User.ToCurrentUser(), id, ct);
         return Ok(task);
     }
 
-    /// <summary>Creates a new task.</summary>
+    /// <summary>Creates a new task (admins may set an assignee; otherwise it is assigned to the caller).</summary>
     [HttpPost]
     [ProducesResponseType(typeof(TaskDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<TaskDto>> CreateTask([FromBody] CreateTaskDto dto, CancellationToken ct)
     {
-        var created = await _taskService.CreateAsync(User.GetUserId(), dto, ct);
+        var created = await _taskService.CreateAsync(User.ToCurrentUser(), dto, ct);
         return CreatedAtAction(nameof(GetTask), new { id = created.Id }, created);
     }
 
@@ -59,7 +62,7 @@ public class TasksController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<TaskDto>> UpdateTask(Guid id, [FromBody] UpdateTaskDto dto, CancellationToken ct)
     {
-        var updated = await _taskService.UpdateAsync(User.GetUserId(), id, dto, ct);
+        var updated = await _taskService.UpdateAsync(User.ToCurrentUser(), id, dto, ct);
         return Ok(updated);
     }
 
@@ -69,7 +72,20 @@ public class TasksController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<TaskDto>> SetCompletion(Guid id, [FromQuery] bool isCompleted, CancellationToken ct)
     {
-        var updated = await _taskService.SetCompletionAsync(User.GetUserId(), id, isCompleted, ct);
+        var updated = await _taskService.SetCompletionAsync(User.ToCurrentUser(), id, isCompleted, ct);
+        return Ok(updated);
+    }
+
+    /// <summary>Admin-only: (re)assigns a task to a user, or unassigns it when assigneeId is omitted.</summary>
+    [HttpPatch("{id:guid}/assign")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(TaskDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TaskDto>> Assign(Guid id, [FromQuery] string? assigneeId, CancellationToken ct)
+    {
+        var updated = await _taskService.AssignAsync(User.ToCurrentUser(), id, assigneeId, ct);
         return Ok(updated);
     }
 
@@ -78,7 +94,7 @@ public class TasksController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Reorder([FromBody] ReorderTasksDto dto, CancellationToken ct)
     {
-        await _taskService.ReorderAsync(User.GetUserId(), dto, ct);
+        await _taskService.ReorderAsync(User.ToCurrentUser(), dto, ct);
         return NoContent();
     }
 
@@ -88,7 +104,7 @@ public class TasksController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteTask(Guid id, CancellationToken ct)
     {
-        await _taskService.DeleteAsync(User.GetUserId(), id, ct);
+        await _taskService.DeleteAsync(User.ToCurrentUser(), id, ct);
         return NoContent();
     }
 }

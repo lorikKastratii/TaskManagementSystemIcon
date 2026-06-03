@@ -19,13 +19,20 @@ public class TaskItemBuilder
         IsCompleted = false,
         SortOrder = 0,
         UserId = "user-1",
+        AssigneeId = "user-1",
         CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
     };
 
+    /// <summary>Creates a task owned by and assigned to the given user (the common case).</summary>
     public static TaskItemBuilder ForUser(string userId) => new TaskItemBuilder().WithUser(userId);
 
     public TaskItemBuilder WithId(Guid id) { _task.Id = id; return this; }
-    public TaskItemBuilder WithUser(string userId) { _task.UserId = userId; return this; }
+
+    /// <summary>Sets both the owner (creator) and the assignee to the given user.</summary>
+    public TaskItemBuilder WithUser(string userId) { _task.UserId = userId; _task.AssigneeId = userId; return this; }
+
+    /// <summary>Overrides only the assignee, leaving the owner unchanged.</summary>
+    public TaskItemBuilder WithAssignee(string? assigneeId) { _task.AssigneeId = assigneeId; return this; }
     public TaskItemBuilder WithTitle(string title) { _task.Title = title; return this; }
     public TaskItemBuilder WithStatus(TaskItemStatus status) { _task.Status = status; return this; }
     public TaskItemBuilder WithPriority(TaskPriority priority) { _task.Priority = priority; return this; }

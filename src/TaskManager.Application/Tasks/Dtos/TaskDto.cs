@@ -16,6 +16,13 @@ public record TaskDto
     public DateTime? DueDate { get; init; }
     public bool IsCompleted { get; init; }
     public int SortOrder { get; init; }
+
+    /// <summary>Id of the user this task is assigned to, or null if unassigned.</summary>
+    public string? AssigneeId { get; init; }
+
+    /// <summary>Display name (or email) of the assignee, resolved for the UI. Null when unassigned.</summary>
+    public string? AssigneeName { get; init; }
+
     public DateTime CreatedAt { get; init; }
     public DateTime? UpdatedAt { get; init; }
 }

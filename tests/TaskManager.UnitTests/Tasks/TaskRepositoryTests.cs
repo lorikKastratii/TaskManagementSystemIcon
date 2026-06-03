@@ -8,8 +8,8 @@ namespace TaskManager.UnitTests.Tasks;
 
 /// <summary>
 /// Integration-style tests for <see cref="TaskRepository"/> against the EF Core InMemory
-/// provider. Primary purpose: prove that every read is scoped to the owning user so data
-/// cannot leak between accounts.
+/// provider. Primary purpose: prove that a regular user's reads are scoped to the tasks
+/// assigned to them, while the admin read returns everything.
 /// </summary>
 public class TaskRepositoryTests
 {
@@ -23,7 +23,7 @@ public class TaskRepositoryTests
     }
 
     [Fact]
-    public async Task GetAllAsync_ShouldReturnOnlyTasksOwnedByUser()
+    public async Task GetForAssigneeAsync_ShouldReturnOnlyTasksAssignedToUser()
     {
         await using var db = NewContext();
         db.Tasks.AddRange(
@@ -33,14 +33,29 @@ public class TaskRepositoryTests
         await db.SaveChangesAsync();
 
         var repo = new TaskRepository(db);
-        var aliceTasks = await repo.GetAllAsync("alice");
+        var aliceTasks = await repo.GetForAssigneeAsync("alice");
 
         aliceTasks.Should().HaveCount(2);
-        aliceTasks.Should().OnlyContain(t => t.UserId == "alice");
+        aliceTasks.Should().OnlyContain(t => t.AssigneeId == "alice");
     }
 
     [Fact]
-    public async Task GetByIdAsync_ShouldReturnNull_WhenTaskBelongsToAnotherUser()
+    public async Task GetAllAsync_ShouldReturnEveryTask_RegardlessOfAssignee()
+    {
+        await using var db = NewContext();
+        db.Tasks.AddRange(
+            TaskItemBuilder.ForUser("alice").Build(),
+            TaskItemBuilder.ForUser("bob").Build());
+        await db.SaveChangesAsync();
+
+        var repo = new TaskRepository(db);
+        var all = await repo.GetAllAsync();
+
+        all.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_ShouldReturnTask_RegardlessOfAssignee()
     {
         await using var db = NewContext();
         var bobsTask = TaskItemBuilder.ForUser("bob").Build();
@@ -48,13 +63,14 @@ public class TaskRepositoryTests
         await db.SaveChangesAsync();
 
         var repo = new TaskRepository(db);
-        var result = await repo.GetByIdAsync("alice", bobsTask.Id);
+        var result = await repo.GetByIdAsync(bobsTask.Id);
 
-        result.Should().BeNull();
+        result.Should().NotBeNull();
+        result!.Id.Should().Be(bobsTask.Id);
     }
 
     [Fact]
-    public async Task GetMaxSortOrderAsync_ShouldReturnZero_WhenUserHasNoTasks()
+    public async Task GetMaxSortOrderAsync_ShouldReturnZero_WhenAssigneeHasNoTasks()
     {
         await using var db = NewContext();
         var repo = new TaskRepository(db);
@@ -65,7 +81,7 @@ public class TaskRepositoryTests
     }
 
     [Fact]
-    public async Task GetAllAsync_ShouldOrderBySortOrder()
+    public async Task GetForAssigneeAsync_ShouldOrderBySortOrder()
     {
         await using var db = NewContext();
         db.Tasks.AddRange(
@@ -74,7 +90,7 @@ public class TaskRepositoryTests
         await db.SaveChangesAsync();
 
         var repo = new TaskRepository(db);
-        var tasks = await repo.GetAllAsync("alice");
+        var tasks = await repo.GetForAssigneeAsync("alice");
 
         tasks.Select(t => t.Title).Should().ContainInOrder("first", "second");
     }
