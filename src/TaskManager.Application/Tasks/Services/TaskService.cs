@@ -10,13 +10,14 @@ using TaskManager.Domain.Entities;
 namespace TaskManager.Application.Tasks.Services;
 
 /// <summary>
-/// Coordinates task use-cases: assignment-based access control, default values, the
-/// Status/IsCompleted invariant, filtering and drag-and-drop reordering. Pure orchestration —
-/// persistence is delegated to <see cref="ITaskRepository"/> and account lookups to
-/// <see cref="IUserDirectory"/>, which keeps this class fully unit-testable.
+/// Coordinates task use-cases: default values, the Status/IsCompleted invariant, filtering and
+/// drag-and-drop reordering. Pure orchestration — persistence is delegated to
+/// <see cref="ITaskRepository"/> and account lookups to <see cref="IUserDirectory"/>, which keeps
+/// this class fully unit-testable.
 ///
-/// Access model: a regular user sees and mutates only tasks assigned to them; an admin sees
-/// all tasks and may (re)assign them to anyone.
+/// Access model: the board is shared. Every authenticated user sees all tasks and may create,
+/// update, complete, reorder and delete any of them. Only an admin may (re)assign a task to
+/// someone else; a regular user's new task defaults to themselves.
 /// </summary>
 public class TaskService : ITaskService
 {
@@ -33,17 +34,15 @@ public class TaskService : ITaskService
 
     public async Task<IReadOnlyList<TaskDto>> GetTasksAsync(CurrentUser caller, TaskQueryParameters query, CancellationToken ct = default)
     {
-        // Admins see the whole board (optionally narrowed to one assignee); everyone else sees
-        // only the tasks assigned to them.
-        var tasks = caller.IsAdmin
-            ? await _repository.GetAllAsync(ct)
-            : await _repository.GetForAssigneeAsync(caller.Id, ct);
+        // Shared board: everyone sees every task. The optional assignee filter just narrows the
+        // view (it does not gate access).
+        var tasks = await _repository.GetAllAsync(ct);
 
         // Filtering is applied in-memory: the working set is small, which keeps the repository
         // contract simple and the filter logic trivially testable.
         IEnumerable<TaskItem> filtered = tasks;
 
-        if (caller.IsAdmin && !string.IsNullOrWhiteSpace(query.AssigneeId))
+        if (!string.IsNullOrWhiteSpace(query.AssigneeId))
             filtered = filtered.Where(t => t.AssigneeId == query.AssigneeId);
 
         if (query.Status.HasValue)
@@ -144,9 +143,9 @@ public class TaskService : ITaskService
 
     public async Task ReorderAsync(CurrentUser caller, ReorderTasksDto dto, CancellationToken ct = default)
     {
-        // Reordering applies to the caller's own assigned list. (Admins reorder their own list too;
-        // cross-user reordering is not a supported operation.)
-        var tasks = await _repository.GetForAssigneeAsync(caller.Id, ct);
+        // The board is shared, so reordering applies to the whole set of tasks. Ids supplied by the
+        // client map to positions; ids that no longer exist are ignored.
+        var tasks = await _repository.GetAllAsync(ct);
         var byId = tasks.ToDictionary(t => t.Id);
 
         // Assign SortOrder by the position of each id in the supplied order. Ids the caller does
@@ -180,16 +179,13 @@ public class TaskService : ITaskService
     // ----------------------------------------------------------------- helpers
 
     /// <summary>
-    /// Loads a task and verifies the caller may act on it: admins may touch any task, regular
-    /// users only tasks assigned to them. Throws NotFound (rather than Forbidden) so a caller
-    /// cannot distinguish "exists but not yours" from "does not exist".
+    /// Loads a task or throws NotFound. The board is shared, so any authenticated caller may act
+    /// on any task; the only failure mode here is a task that does not exist.
     /// </summary>
     private async Task<TaskItem> LoadAccessibleAsync(CurrentUser caller, Guid id, CancellationToken ct)
     {
-        var task = await _repository.GetByIdAsync(id, ct);
-        if (task is null || (!caller.IsAdmin && task.AssigneeId != caller.Id))
-            throw new NotFoundException(nameof(TaskItem), id);
-        return task;
+        return await _repository.GetByIdAsync(id, ct)
+            ?? throw new NotFoundException(nameof(TaskItem), id);
     }
 
     /// <summary>Validates that a non-null assignee id refers to a real account.</summary>

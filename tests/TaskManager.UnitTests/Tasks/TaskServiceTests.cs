@@ -45,19 +45,20 @@ public class TaskServiceTests
     // ---------------------------------------------------------------- GetTasks (filtering / scope)
 
     [Fact]
-    public async Task GetTasksAsync_ShouldReturnTasksAssignedToCaller_WhenNotAdmin()
+    public async Task GetTasksAsync_ShouldReturnAllTasks_EvenForRegularUser()
     {
-        _repository.Setup(r => r.GetForAssigneeAsync(UserId, It.IsAny<CancellationToken>()))
+        // The board is shared: a regular user sees every task, not just their own.
+        _repository.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[]
             {
-                TaskItemBuilder.ForUser(UserId).WithStatus(TaskItemStatus.Todo).Build(),
-                TaskItemBuilder.ForUser(UserId).WithStatus(TaskItemStatus.Done).Completed().Build()
+                TaskItemBuilder.ForUser(UserId).Build(),
+                TaskItemBuilder.ForUser(OtherId).Build()
             });
 
         var result = await _sut.GetTasksAsync(User, new TaskQueryParameters());
 
         result.Should().HaveCount(2);
-        _repository.Verify(r => r.GetAllAsync(It.IsAny<CancellationToken>()), Times.Never);
+        _repository.Verify(r => r.GetForAssigneeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -77,7 +78,7 @@ public class TaskServiceTests
     }
 
     [Fact]
-    public async Task GetTasksAsync_ShouldFilterByAssignee_WhenAdminSuppliesAssigneeId()
+    public async Task GetTasksAsync_ShouldFilterByAssignee_WhenAssigneeIdSupplied()
     {
         _repository.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[]
@@ -94,7 +95,7 @@ public class TaskServiceTests
     [Fact]
     public async Task GetTasksAsync_ShouldFilterByStatus()
     {
-        _repository.Setup(r => r.GetForAssigneeAsync(UserId, It.IsAny<CancellationToken>()))
+        _repository.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[]
             {
                 TaskItemBuilder.ForUser(UserId).WithStatus(TaskItemStatus.Todo).Build(),
@@ -109,7 +110,7 @@ public class TaskServiceTests
     [Fact]
     public async Task GetTasksAsync_ShouldFilterBySearchTerm_CaseInsensitively()
     {
-        _repository.Setup(r => r.GetForAssigneeAsync(UserId, It.IsAny<CancellationToken>()))
+        _repository.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[]
             {
                 TaskItemBuilder.ForUser(UserId).WithTitle("Buy Milk").Build(),
@@ -125,7 +126,7 @@ public class TaskServiceTests
     public async Task GetTasksAsync_ShouldResolveAssigneeName()
     {
         var task = TaskItemBuilder.ForUser(UserId).Build();
-        _repository.Setup(r => r.GetForAssigneeAsync(UserId, It.IsAny<CancellationToken>())).ReturnsAsync(new[] { task });
+        _repository.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new[] { task });
         _users.Setup(u => u.GetAllAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { new UserSummaryDto { Id = UserId, DisplayName = "test1" } });
 
@@ -148,14 +149,15 @@ public class TaskServiceTests
     }
 
     [Fact]
-    public async Task GetByIdAsync_ShouldThrowNotFound_WhenTaskAssignedToAnotherUser()
+    public async Task GetByIdAsync_ShouldReturnTask_WhenAssignedToAnotherUser()
     {
+        // Shared board: a regular user may read a task assigned to someone else.
         var othersTask = TaskItemBuilder.ForUser(OtherId).Build();
         _repository.Setup(r => r.GetByIdAsync(othersTask.Id, It.IsAny<CancellationToken>())).ReturnsAsync(othersTask);
 
-        var act = () => _sut.GetByIdAsync(User, othersTask.Id);
+        var result = await _sut.GetByIdAsync(User, othersTask.Id);
 
-        await act.Should().ThrowAsync<NotFoundException>();
+        result.Id.Should().Be(othersTask.Id);
     }
 
     [Fact]
@@ -258,14 +260,16 @@ public class TaskServiceTests
     }
 
     [Fact]
-    public async Task UpdateAsync_ShouldThrowNotFound_WhenTaskAssignedToAnotherUser()
+    public async Task UpdateAsync_ShouldSucceed_WhenTaskAssignedToAnotherUser()
     {
-        var othersTask = TaskItemBuilder.ForUser(OtherId).Build();
+        // Shared board: any user may edit a task assigned to someone else.
+        var othersTask = TaskItemBuilder.ForUser(OtherId).WithTitle("Original").Build();
         _repository.Setup(r => r.GetByIdAsync(othersTask.Id, It.IsAny<CancellationToken>())).ReturnsAsync(othersTask);
+        _repository.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
-        var act = () => _sut.UpdateAsync(User, othersTask.Id, new UpdateTaskDto { Title = "x" });
+        var result = await _sut.UpdateAsync(User, othersTask.Id, new UpdateTaskDto { Title = "Renamed" });
 
-        await act.Should().ThrowAsync<NotFoundException>();
+        result.Title.Should().Be("Renamed");
     }
 
     // ---------------------------------------------------------------- SetCompletion
@@ -343,7 +347,7 @@ public class TaskServiceTests
     {
         var a = TaskItemBuilder.ForUser(UserId).WithSortOrder(0).Build();
         var b = TaskItemBuilder.ForUser(UserId).WithSortOrder(1).Build();
-        _repository.Setup(r => r.GetForAssigneeAsync(UserId, It.IsAny<CancellationToken>())).ReturnsAsync(new[] { a, b });
+        _repository.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new[] { a, b });
         IEnumerable<TaskItem>? updated = null;
         _repository.Setup(r => r.UpdateRangeAsync(It.IsAny<IEnumerable<TaskItem>>(), It.IsAny<CancellationToken>()))
             .Callback<IEnumerable<TaskItem>, CancellationToken>((t, _) => updated = t.ToList())
